@@ -1,315 +1,261 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Game</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stick Figure Game with Blocks and Triangles</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
-        }
-        canvas {
-            display: block;
-            margin: auto;
-            border: 2px solid #000;
-        }
-        .start-menu, .shop-menu {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #fff;
-            padding: 20px;
-            border: 2px solid #000;
-        }
-        .start-button, .shop-button {
-            margin: 10px;
-            padding: 20px 40px;
-            font-size: 24px;
-            background-color: red;
-            color: #fff;
-            border: none;
-            cursor: pointer;
-        }
-        .insane-button, .waza-button {
-            position: absolute;
-            padding: 5px 10px;
-            font-size: 12px;
-            background-color: black;
-            color: #fff;
-            border: none;
-            cursor: pointer;
-        }
-        .insane-button {
-            bottom: 10px;
-            right: 10px;
-        }
-        .waza-button {
-            bottom: 10px;
-            left: 10px;
-            background-color: yellow;
-            color: #000;
-        }
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+
+      #gameCanvas {
+        position: relative;
+        width: 100%;
+        height: 100vh;
+      }
+
+      .stick-figure {
+        position: absolute;
+        width: 60px;
+        height: 60px;
+        background-image: url("smile.Png");
+        background-size: contain;
+        background-repeat: no-repeat;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .floor {
+        position: absolute;
+        width: 200%; /* Adjusted to allow scrolling effect */
+        height: 20px;
+        background-image: url("bloodbrick.png");
+        background-size: cover;
+        bottom: 0;
+      }
+
+      .background {
+        position: absolute;
+        width: 200%;
+        height: 100%;
+        background-image: url("bloodbackground.png");
+        background-size: cover;
+        background-repeat: repeat-x;
+        top: 0;
+        left: 0;
+      }
+
+      .block {
+        position: absolute;
+        width: 60px;
+        height: 60px;
+        background-image: url("bloodbrick.png");
+        background-size: cover;
+      }
+
+      .triangle {
+        position: absolute;
+        width: 0;
+        height: 0;
+        border-left: 30px solid transparent;
+        border-right: 30px solid transparent;
+        border-bottom: 60px solid transparent; /* Use transparent for the triangle itself */
+      }
+
+      .triangle-texture {
+        position: absolute;
+        width: 60px; /* Adjust size */
+        height: 60px; /* Adjust size */
+        background-image: url("bloodbrick.png");
+        background-size: cover;
+        top: -60px; /* Adjusted position behind the triangle */
+        left: -30px; /* Center it behind the triangle */
+      }
     </style>
-</head>
-<body>
-    <canvas id="gameCanvas" width="1000" height="600"></canvas>
-    <div class="start-menu" id="startMenu">
-        <button class="start-button" data-speed="0.5" data-spawn-rate="3000">Easy</button>
-        <button class="start-button" data-speed="1" data-spawn-rate="2000">Normal</button>
-        <button class="start-button" data-speed="3" data-spawn-rate="1000">Hard</button>
+  </head>
+  <body>
+    <div id="gameCanvas">
+      <div class="background" id="background"></div>
+      <div class="floor" id="floor"></div>
+      <div id="stickFigure" class="stick-figure"></div>
     </div>
-    <div class="shop-menu" id="shopMenu" style="display: none;">
-        <button class="shop-button" id="buyJump" data-cost="25">Buy Higher Jump (25 points)</button>
-        <button class="shop-button" id="buySpeed" data-cost="25">Buy Super Speed (25 points)</button>
-        <button class="shop-button" id="startGameBtn">Start Game</button>
-    </div>
-    <button class="insane-button" data-speed="5" data-spawn-rate="500">Insane</button>
-    <button class="waza-button" data-speed="69" data-spawn-rate="100" data-waza="true">Waza?</button>
+
     <script>
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
+      const stickFigure = document.getElementById("stickFigure");
+      const gameCanvas = document.getElementById("gameCanvas");
+      const background = document.getElementById("background");
+      const floor = document.getElementById("floor");
 
-        let player = {
-            x: canvas.width / 2,
-            y: canvas.height - 40,
-            size: 30,
-            color: "purple",
-            dx: 0,
-            dy: 0,
-            speed: 5,
-            gravity: 0.5,
-            jumpForce: -10,
-            isJumping: false,
-            hasSuperJump: false,
-            hasSuperSpeed: false
-        };
+      let posX = 0;
+      const gravity = 0.8;
+      const jumpForce = -15;
+      let verticalVelocity = 0;
+      let isJumping = false;
+      let floorY = window.innerHeight - 80;
+      const keys = {};
+      let blocks = [];
+      let blockSpawnInterval = 500; // Initial spawn interval for blocks
+      let timeSinceLastBlock = 0;
+      let distanceTraveled = 0; // Track distance traveled
 
-        let blackCubes = [];
-        let redCubes = [];
-        let isGameOver = false;
-        let isWazaMode = false;
-        let score = 0;
-        let totalPoints = 0;
-        let gameTime = 0;
-        let redCubeSpeed = 2;
-        let redCubeSpawnRate = 2000;
-        let lastRedCubeSpawnTime = 0;
-        let lastBlackCubeSpawnTime = 0;
-        let gameSpeed = 1;
+      function createBlock() {
+        const block = document.createElement("div");
+        block.classList.add("block");
 
-        document.querySelectorAll(".start-button").forEach(button => {
-            button.addEventListener("click", () => setUpGame(parseFloat(button.dataset.speed), parseInt(button.dataset.spawnRate)));
+        // Spawn blocks on the floor
+        block.style.left = `${window.innerWidth + Math.random() * 200}px`;
+        block.style.top = `${floorY - 60}px`; // Spawn on the floor
+
+        gameCanvas.appendChild(block);
+        blocks.push({ element: block, falling: true }); // Add block to array with falling status
+      }
+
+      function createTriangleFormation(levelY) {
+        // Function to create triangles
+        for (let i = 0; i < 3; i++) {
+          const triangle = document.createElement("div");
+          triangle.classList.add("triangle");
+          triangle.style.left = `${window.innerWidth + Math.random() * 200}px`;
+          triangle.style.top = `${levelY}px`;
+
+          const triangleTexture = document.createElement("div");
+          triangleTexture.classList.add("triangle-texture");
+          triangleTexture.style.top = `0px`; // Position of the texture should be adjusted
+          triangleTexture.style.left = `0px`; // Center it behind the triangle
+
+          gameCanvas.appendChild(triangle);
+          gameCanvas.appendChild(triangleTexture); // Append the textured square behind the triangle
+          blocks.push({ element: triangle, falling: false }); // Non-falling blocks
+        }
+
+        // Create the top triangle
+        for (let i = 0; i < 1; i++) {
+          const triangle = document.createElement("div");
+          triangle.classList.add("triangle");
+          triangle.style.left = `${window.innerWidth + Math.random() * 200}px`;
+          triangle.style.top = `${levelY - 60}px`; // Top triangle
+
+          const triangleTexture = document.createElement("div");
+          triangleTexture.classList.add("triangle-texture");
+          triangleTexture.style.top = `0px`; // Position of the texture should be adjusted
+          triangleTexture.style.left = `0px`; // Center it behind the triangle
+
+          gameCanvas.appendChild(triangle);
+          gameCanvas.appendChild(triangleTexture); // Append the textured square behind the triangle
+          blocks.push({ element: triangle, falling: false }); // Non-falling block
+        }
+      }
+
+      function moveBlocks(movement) {
+        blocks.forEach((blockObj, index) => {
+          const block = blockObj.element;
+          const blockX = parseInt(block.style.left, 10);
+          const blockY = parseInt(block.style.top, 10);
+
+          // Check if the block is falling
+          if (blockObj.falling) {
+            if (blockY < window.innerHeight - 80) {
+              // Keep falling until it hits the floor
+              block.style.top = `${blockY + gravity}px`;
+            }
+          }
+
+          // Move the block
+          block.style.left = `${blockX - movement}px`;
+
+          // Remove blocks that have moved off-screen
+          if (blockX < -60) {
+            block.remove();
+            blocks.splice(index, 1);
+          }
+
+          // Check for collision with stick figure
+          const stickFigureX = window.innerWidth / 2 - 30;
+          const stickFigureY = parseInt(stickFigure.style.top, 10);
+
+          // Simple collision detection for standing on blocks
+          if (
+            stickFigureX < blockX + 60 &&
+            stickFigureX + 60 > blockX &&
+            stickFigureY + 60 >= blockY &&
+            stickFigureY < blockY + 60
+          ) {
+            floorY = blockY - 60; // Stick figure stands on the block
+            isJumping = false;
+            verticalVelocity = 0;
+          }
         });
-        document.querySelector(".insane-button").addEventListener("click", () => setUpGame(5, 500));
-        document.querySelector(".waza-button").addEventListener("click", () => setUpGame(69, 100, true));
-        document.getElementById("startGameBtn").addEventListener("click", startGame);
-        document.getElementById("buyJump").addEventListener("click", buyPowerUp);
-        document.getElementById("buySpeed").addEventListener("click", buyPowerUp);
+      }
 
-        function setUpGame(speed, spawnRate, waza = false) {
-            document.getElementById("startMenu").style.display = "none";
-            document.querySelector(".insane-button").style.display = "none";
-            document.querySelector(".waza-button").style.display = "none";
-            document.getElementById("shopMenu").style.display = "flex";
-            isGameOver = false;
-            isWazaMode = waza;
-            gameSpeed = speed;
-            redCubeSpawnRate = spawnRate;
+      function moveBackground() {
+        let movement = 0;
+
+        if (keys["a"]) movement -= 2; // Move background left (stick figure appears to move right)
+        if (keys["d"]) movement += 2; // Move background right (stick figure appears to move left)
+
+        posX += movement;
+        distanceTraveled += Math.abs(movement); // Track distance traveled
+
+        // Increase block spawn rate as player travels further
+        if (distanceTraveled > 1000) {
+          blockSpawnInterval = Math.max(
+            100,
+            500 - Math.floor(distanceTraveled / 10)
+          ); // Decrease interval
         }
 
-        function startGame() {
-            document.getElementById("shopMenu").style.display = "none";
-            score = 0;
-            gameTime = 0;
-            blackCubes = [];
-            redCubes = [];
-            redCubeSpeed = 2;
-            lastRedCubeSpawnTime = 0;
-            lastBlackCubeSpawnTime = 0;
-            player.x = canvas.width / 2;
-            player.y = canvas.height - 40;
-            player.dy = 0;
-            player.isJumping = false;
-            player.hasSuperJump = false;
-            player.hasSuperSpeed = false;
-            requestAnimationFrame(update);
+        // Move the background and floor to create the illusion of infinite scrolling
+        background.style.left = `${(posX % window.innerWidth) * -1}px`; // Loop background
+        floor.style.left = `${(posX % window.innerWidth) * -1}px`; // Loop floor
+
+        // Jumping mechanics
+        if ((keys[" "] || keys["w"]) && !isJumping) {
+          verticalVelocity = jumpForce;
+          isJumping = true;
         }
 
-        function buyPowerUp(e) {
-            const cost = parseInt(e.target.dataset.cost);
-            if (totalPoints >= cost) {
-                totalPoints -= cost;
-                if (e.target.id === "buyJump") {
-                    player.hasSuperJump = true;
-                } else if (e.target.id === "buySpeed") {
-                    player.hasSuperSpeed = true;
-                }
-            }
+        // Apply gravity
+        verticalVelocity += gravity;
+        floorY += verticalVelocity;
+
+        // Check if the stick figure has landed
+        if (floorY >= window.innerHeight - 80) {
+          floorY = window.innerHeight - 80;
+          isJumping = false;
+          verticalVelocity = 0;
         }
 
-        function drawPlayer() {
-            ctx.fillStyle = player.color;
-            ctx.fillRect(player.x, player.y, player.size, player.size);
+        // Ensure the stick figure remains centered vertically
+        stickFigure.style.top = `${floorY}px`;
+
+        // Move the blocks
+        moveBlocks(movement);
+
+        // Block spawning logic
+        timeSinceLastBlock += Math.abs(movement);
+        if (timeSinceLastBlock > blockSpawnInterval) {
+          createBlock();
+          createTriangleFormation(floorY - 60); // Spawns triangle at player's level
+          timeSinceLastBlock = 0;
         }
+      }
 
-        function drawCubes() {
-            blackCubes.forEach(cube => {
-                ctx.fillStyle = isWazaMode ? getRandomColor() : "#000";
-                ctx.fillRect(cube.x, cube.y, cube.size, cube.size);
-            });
-            redCubes.forEach(cube => {
-                ctx.fillStyle = isWazaMode ? getRandomColor() : "#f00";
-                ctx.fillRect(cube.x, cube.y, cube.size, cube.size);
-            });
-        }
+      window.addEventListener("keydown", (event) => {
+        keys[event.key] = true;
+      });
 
-        function drawScore() {
-            ctx.fillStyle = "#000";
-            ctx.font = "20px Arial";
-            ctx.fillText("Score: " + score, 20, 30);
-            ctx.fillText("Time: " + (gameTime / 1000).toFixed(2) + "s", 20, 60);
-            ctx.fillText("Total Points: " + totalPoints, 20, 90);
-        }
+      window.addEventListener("keyup", (event) => {
+        keys[event.key] = false;
+      });
 
-        function collisionDetection() {
-            blackCubes.forEach((cube, index) => {
-                if (
-                    player.x < cube.x + cube.size &&
-                    player.x + player.size > cube.x &&
-                    player.y < cube.y + cube.size &&
-                    player.y + player.size > cube.y
-                ) {
-                    blackCubes.splice(index, 1);
-                    score++;
-                    totalPoints++;
-                }
-            });
+      function gameLoop() {
+        moveBackground();
+        requestAnimationFrame(gameLoop);
+      }
 
-            redCubes.forEach((cube) => {
-                if (
-                    player.x < cube.x + cube.size &&
-                    player.x + player.size > cube.x &&
-                    player.y < cube.y + cube.size &&
-                    player.y + player.size > cube.y
-                ) {
-                    if (!isWazaMode) gameOver();
-                }
-            });
-        }
-
-        function gameOver() {
-            isGameOver = true;
-            ctx.fillStyle = "#0000FF"; // Blue color for game over screen
-            ctx.font = "30px Arial";
-            ctx.fillText("Game Over", canvas.width / 2 - 80, canvas.height / 2);
-            ctx.fillText("Final Score: " + score, canvas.width / 2 - 80, canvas.height / 2 + 40);
-            ctx.fillText("Time: " + (gameTime / 1000).toFixed(2) + "s", canvas.width / 2 - 80, canvas.height / 2 + 80);
-            ctx.fillText("Total Points: " + totalPoints, canvas.width / 2 - 80, canvas.height / 2 + 120);
-            document.getElementById("startMenu").style.display = "flex";
-            document.querySelector(".insane-button").style.display = "block";
-            document.querySelector(".waza-button").style.display = "block";
-        }
-
-        function update(timestamp) {
-            if (isGameOver) return;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            gameTime += 1000 / 60; // assuming 60fps
-
-            player.y += player.dy;
-            player.dy += player.gravity;
-            player.x += player.dx;
-
-            if (player.y + player.size > canvas.height) {
-                player.y = canvas.height - player.size;
-                player.dy = 0;
-                player.isJumping = false;
-            }
-
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.size > canvas.width) player.x = canvas.width - player.size;
-
-            if (timestamp - lastRedCubeSpawnTime > redCubeSpawnRate) {
-                redCubes.push({ x: Math.random() * canvas.width, y: -20, size: 20 });
-                lastRedCubeSpawnTime = timestamp;
-            }
-
-            if (timestamp - lastBlackCubeSpawnTime > redCubeSpawnRate * 2) {
-                blackCubes.push({ x: Math.random() * canvas.width, y: -20, size: 20 });
-                lastBlackCubeSpawnTime = timestamp;
-            }
-
-            redCubes.forEach((cube, index) => {
-                cube.y += redCubeSpeed * gameSpeed;
-                if (cube.y > canvas.height) {
-                    redCubes.splice(index, 1);
-                }
-            });
-
-            blackCubes.forEach((cube, index) => {
-                cube.y += redCubeSpeed * gameSpeed;
-                if (cube.y > canvas.height) {
-                    blackCubes.splice(index, 1);
-                }
-            });
-
-            drawPlayer();
-            drawCubes();
-            drawScore();
-            collisionDetection();
-
-            requestAnimationFrame(update);
-        }
-
-        function getRandomColor() {
-            const letters = "0123456789ABCDEF";
-            let color = "#";
-            for (let i = 0; i < 6; i++) {
-                color += letters[Math.floor(Math.random() * 16)];
-            }
-            return color;
-        }
-
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "w" || e.key === "W") {
-                if (!player.isJumping) {
-                    player.dy = player.hasSuperJump ? player.jumpForce * 1.5 : player.jumpForce;
-                    player.isJumping = true;
-                }
-            }
-            if (e.key === "a" || e.key === "A") {
-                player.dx = player.hasSuperSpeed ? -player.speed * 2 : -player.speed;
-            }
-            if (e.key === "d" || e.key === "D") {
-                player.dx = player.hasSuperSpeed ? player.speed * 2 : player.speed;
-            }
-        });
-
-        document.addEventListener("keyup", (e) => {
-            if (e.key === "a" || e.key === "A" || e.key === "d" || e.key === "D") {
-                player.dx = 0;
-            }
-        });
-
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "r" || e.key === "R") {
-                resetGame();
-            }
-        });
-
-        function resetGame() {
-            document.getElementById("startMenu").style.display = "flex";
-            document.querySelector(".insane-button").style.display = "block";
-            document.querySelector(".waza-button").style.display = "block";
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+      gameLoop();
     </script>
-</body>
+  </body>
 </html>
